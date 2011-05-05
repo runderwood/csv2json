@@ -25,17 +25,21 @@ typedef struct {
     int state;
     int buf_idx;
     int row_count;
-    GSList *field_list;
+    int col_count;
 } c2j_ctxt;
 
 c2j_ctxt *c2j_new() {
     c2j_ctxt *context = malloc(sizeof(c2j_ctxt));
-    context->field_list = g_slist_alloc();
+    context->value_len = 0;
+    context->buf_len = 0;
+    context->state = C2J_ST_SC;
+    context->buf_idx = 0;
+    context->row_count = 0;
+    context->col_count = 0;
     return context;
 }
 
 int c2j_free(c2j_ctxt *context) {
-    g_slist_free(context->field_list);
     free(context);
     return 0;
 }
@@ -44,16 +48,33 @@ int c2j_st_val(c2j_ctxt *context) {
     context->value_buf[0] = '\0';
     context->value_len = 0;
     context->state = C2J_ST_VA;
+    if(context->col_count > 0) {
+        printf(",");
+    } else {
+        if(context->row_count > 0) {
+            printf(",");
+        }
+        printf("[");
+    }
     return 0;
 }
 
 int c2j_en_val(c2j_ctxt *context) {
     context->value_buf[context->value_len] = '\0';
-    char *s = g_strndup(context->value_buf, context->value_len);
-    context->field_list = g_slist_append(context->field_list, s);
+    printf("\"");
+    int i; char c;
+    for(i=0; i<context->value_len; i++) {
+        c = context->value_buf[i];
+        if(C2J_ENCAP == c) {
+            printf("%c", C2J_ESCAP);
+        }
+        printf("%c", c);
+    }
+    printf("\"");
     context->value_buf[0] = '\0';
     context->value_len = 0;
     context->state = C2J_ST_SC;
+    context->col_count++;
     return 0;
 }
 
@@ -89,27 +110,10 @@ int c2j_en_esc(c2j_ctxt *context) {
 }
 
 int c2j_en_line(c2j_ctxt *context) {
+    printf("]\n");
     context->row_count++;
-    // do something with field list
-    GSList *nxt = context->field_list;
-    while((nxt = g_slist_next(nxt)) != NULL) {
-        printf("\"");
-        char *c = nxt->data;
-        while(*c != '\0') {
-            if(*c == C2J_ENCAP)
-                printf("\\");
-            printf("%c", *c);
-            c++;
-        } 
-        printf("\"");
-        if(nxt != g_slist_last(context->field_list))
-            printf(",");
-    }
-    printf("\n");
-    // empty field list
-    g_slist_free(context->field_list);
-    context->field_list = g_slist_alloc();
     context->state = C2J_ST_SC;
+    context->col_count = 0;
     return 0;
 }
 
@@ -218,6 +222,7 @@ int main(int argc, char **argv) {
     c2j_ctxt *context = c2j_new();
     context->state = C2J_ST_SC;
     int i;
+    printf("[\n");
     while(!feof(stdin)) {
         context->buf_len = fread(&(context->buf), sizeof(char), C2J_BUF_SIZE-1, stdin);
         context->buf[context->buf_len] = '\0';
@@ -225,7 +230,7 @@ int main(int argc, char **argv) {
             c2j_read(context, i);
         }
     }
-    printf("read %d rows\n", context->row_count);
+    printf("]\n");
     c2j_free(context);
     return EXIT_SUCCESS;
 }
