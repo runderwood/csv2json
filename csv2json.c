@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
-#include <glib.h>
 
 #define C2J_BUF_SIZE 32 
 #define C2J_MAX_VAL_SIZE 256
